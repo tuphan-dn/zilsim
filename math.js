@@ -26,3 +26,11 @@ BigInt.prototype.less = function () {
   const rand = BigInt(Math.floor(Number(BigInt.PRECISION) * Math.random()))
   return (this * rand) / BigInt.PRECISION
 }
+
+/**
+ * Absolution
+ */
+BigInt.prototype.abs = function () {
+  if (this < 0n) return this * -1n
+  return this
+}

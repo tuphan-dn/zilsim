@@ -64,10 +64,16 @@ class AMM {
     const bidAmount = amount - bidFee
     const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
+    // [always] alpha > beta
     const alpha = (this.anchor[bidType] * BigInt.PRECISION) / this[bidType]
     const beta = (this.anchor[bidType] * BigInt.PRECISION) / newReserveBid
+    const signed =
+      (BigInt.PRECISION - beta) * (BigInt.PRECISION - alpha) >= 0n ? -1n : 1n
     const askFee =
-      (((BigInt.PRECISION - beta) ** 2n - (BigInt.PRECISION - alpha) ** 2n) *
+      ((
+        (BigInt.PRECISION - beta) ** 2n +
+        signed * (BigInt.PRECISION - alpha) ** 2n
+      ).abs() *
         this.anchor[askType]) /
       BigInt.PRECISION ** 2n /
       2n
@@ -103,6 +109,7 @@ class AMM {
     const nextPrice = Number(nextAskReserve) / Number(nextBidReserve)
     const anchorPrice =
       Number(this.anchor[askType]) / Number(this.anchor[bidType])
+    console.log(bidType, '→', askType)
     console.log(
       'Price change %',
       (Math.abs(nextPrice - prevPrice) / prevPrice) * 100,
