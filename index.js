@@ -7,14 +7,14 @@ const A = 1000000000n * decimals
 const B = 5000000000n * decimals
 
 const amm = new AMM(A, B)
-const swapBot = new SwapBot(A, B, amm)
+const bot = new SwapBot(A, B, amm)
 
-let stop = 1
+let stop = 1000
 console.log(amm.history[amm.history.length - 1])
 while (stop-- > 0) {
   console.log('=======================================================')
   // Swap
-  const returns = swapBot.swap()
+  const returns = bot.swap()
   console.log('Returns:', returns)
   console.log(amm.history[amm.history.length - 1])
   // Estimate loss

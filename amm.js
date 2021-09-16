@@ -4,19 +4,14 @@ const TAX = 500000000000000n
 
 class AMM {
   constructor(A, B) {
+    console.log(A, B)
     this.A = A
     this.B = B
-    this.liquidity = 0n
-
+    this.liquidity = (A * B).sqrt()
     this.anchor = { A, B }
-
     // History
     this.history = []
     this.record()
-  }
-
-  get _LIQUIDITY() {
-    return this._liquidity(this.A, this.B)
   }
 
   // Min A
@@ -31,8 +26,8 @@ class AMM {
     else return this.anchor.B
   }
 
-  _liquidity = (a, b) => {
-    return (a * b).sqrt()
+  get alpha() {
+    return (BigInt.PRECISION * this.A) / this.anchor.A
   }
 
   record = () => {
@@ -45,60 +40,28 @@ class AMM {
   }
 
   deposit = (a, b) => {
-    if (a <= 0n || b <= 0n) throw new Error('Negative numbers')
-    const A = this.A + this.vault.A
-    const B = this.B + this.vault.B
-    // |a| >= |b|
-    if (a * B >= b * A) {
-      // Estimate ratio
-      const bMain = (b * this.B) / B
-      const bVault = b - bMain
-      const aMain = (b * this.A) / B
-      const aVault = (b * this.vault.B) / B
-      const lpt = (aMain * bMain).sqrt()
-      // Update
-      this.A = this.A + aMain
-      this.B = this.B + bMain
-      this.anchor.A = this.anchor.A + aVault
-      this.anchor.B = this.anchor.B + bMain
-      // Return
-      return {
-        a: a - aMain - aVault,
-        b: b - bMain - bVault,
-        lpt,
-      }
-    }
-    // |a| < |b|
-    else {
-      // Estimate ratio
-      const aMain = (a * this.A) / A
-      const aVault = a - aMain
-      const bMain = (a * this.B) / A
-      const bVault = (a * this.vault.B) / A
-      const lpt = (aMain * bMain).sqrt()
-      // Update
-      this.A = this.A + aMain
-      this.B = this.B + bMain
-      this.anchor.A = this.anchor.A + aVault
-      this.anchor.B = this.anchor.B + bMain
-      // Return
-      return {
-        a: a - aMain - aVault,
-        b: b - bMain - bVault,
-        lpt,
-      }
-    }
+    if (a <= 0n || b <= 0n) throw new Error('Must be positive numbers')
+    const c = (this.A * a) / this.anchor.A
+    const d = (this.B * b) / this.anchor.B
+    this.A = this.A + a
+    this.B = this.B + b
+    this.anchor.A = this.anchor.A + c
+    this.anchor.B = this.anchor.B + d
+    const lpt = (a * this.liquidity) / this.A
+    return { lpt }
   }
 
-  withdraw = (liquidity) => {
-    if (a <= 0n || b <= 0n) throw new Error('Negative numbers')
-    const aMain = (liquidity * this.A) / this._LIQUIDITY
-    const bMain = (liquidity * this.B) / this._LIQUIDITY
-    this.A = this.A - aMain
-    this.B = this.B - bMain
-    this.anchor.A = this.anchor.A - aMain
-    this.anchor.B = this.anchor.B - bMain
-    return { a: aMain, b: bMain }
+  withdraw = (lpt) => {
+    if (lpt) throw new Error('Must be positive numbers')
+    const a = (lpt * this.A) / this.liquidity
+    const b = (lpt * this.B) / this.liquidity
+    const c = (a * this.anchor.A) / this.A
+    const d = (b * this.anchor.B) / this.B
+    this.A = this.A - a
+    this.B = this.B - b
+    this.anchor.A = this.anchor.A - c
+    this.anchor.B = this.anchor.B - d
+    return { a, b }
   }
 
   _fee = (bidReserve, bidType, askType) => {
@@ -108,25 +71,44 @@ class AMM {
     )
   }
 
-  _tax = (amount) => {
-    const tax = (amount * TAX) / BigInt.PRECISION
-    return { tax, amount: amount - tax }
+  loop = (x, y, update, bidType = 'A', askType = 'B', step = 0) => {
+    const newReserveBid = this[bidType] + x
+    const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
+    const alpha = (this[bidType] * BigInt.PRECISION) / newReserveBid
+    const loss =
+      ((BigInt.PRECISION - alpha) ** 2n * this.anchor[askType]) /
+      BigInt.PRECISION ** 2n /
+      2n
+    const fee = loss > 1n ? loss : 1n
+    if (!update) return { x, fee, y, step }
+    if (fee * newReserveBid > y * newReserveAsk) {
+      x = x - update
+      y = y + update
+      return this.loop(x, y, update / 2n, bidType, askType, ++step)
+    } else if (fee * newReserveBid < y * newReserveAsk) {
+      x = x + update
+      y = y - update
+      return this.loop(x, y, update / 2n, bidType, askType, ++step)
+    } else {
+      return { x, y, fee, step }
+    }
   }
 
-  swap = (_amount, bidType = 'A', askType = 'B') => {
-    // Tax
-    const { tax, amount } = this._tax(_amount)
-    // Bid reserve
+  swap = (amount, bidType = 'A', askType = 'B') => {
+    // Compute propostion
+    const { x, y, fee, step } = this.loop(
+      amount,
+      0n,
+      amount / 2n,
+      bidType,
+      askType,
+    )
+    console.log(x, y, fee, step)
+    // Bid/Ask reserve
     const prevBidReserve = this[bidType]
-    const nextBidReserve = prevBidReserve + amount
-    // Ask reserve
+    const nextBidReserve = prevBidReserve + x
     const prevAskReserve = this[askType]
     const nextAskReserve = (prevBidReserve * prevAskReserve) / nextBidReserve
-    // Ask amount & IL compensation
-    const prevComp = this._fee(prevBidReserve, bidType, askType)
-    const nextComp = this._fee(nextBidReserve, bidType, askType)
-    console.log(prevComp, nextComp)
-    const fee = nextComp - prevComp
     const askAmount = prevAskReserve - nextAskReserve - fee
 
     const prevPrice = Number(prevAskReserve) / Number(prevBidReserve)
@@ -144,10 +126,13 @@ class AMM {
       fee,
       (Number(fee) / Number(prevAskReserve - nextAskReserve)) * 100,
     )
-
     // History
-    this[bidType] = nextBidReserve
-    this[askType] = nextAskReserve
+    this[bidType] = nextBidReserve + y
+    this[askType] = nextAskReserve + fee
+    this.anchor[bidType] =
+      this.anchor[bidType] + (y * this.anchor[bidType]) / this[bidType]
+    this.anchor[askType] =
+      this.anchor[askType] + (fee * this.anchor[askType]) / this[askType]
     this.record()
     // Return
     return askAmount
