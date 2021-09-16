@@ -1,6 +1,6 @@
 require('./math')
 
-const TAX = 500000000000000n
+const TAX = 250000000000000n
 
 class AMM {
   constructor(A, B) {
@@ -24,10 +24,6 @@ class AMM {
   get _B() {
     if (this.B < this.anchor.B) return this.B
     else return this.anchor.B
-  }
-
-  get alpha() {
-    return (BigInt.PRECISION * this.A) / this.anchor.A
   }
 
   record = () => {
@@ -64,75 +60,73 @@ class AMM {
     return { a, b }
   }
 
-  _fee = (bidReserve, bidType, askType) => {
-    return (
-      ((bidReserve - this[`_${bidType}`]) ** 2n * this.anchor[askType]) /
-      bidReserve ** 2n
-    )
-  }
-
-  loop = (x, y, update, bidType = 'A', askType = 'B', step = 0) => {
-    const newReserveBid = this[bidType] + x
+  loop = (amount, bidFee, update, bidType = 'A', askType = 'B', step = 0) => {
+    const bidAmount = amount - bidFee
+    const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
-    const alpha = (this[bidType] * BigInt.PRECISION) / newReserveBid
-    const loss =
-      ((BigInt.PRECISION - alpha) ** 2n * this.anchor[askType]) /
+    const alpha = (this.anchor[bidType] * BigInt.PRECISION) / this[bidType]
+    const beta = (this.anchor[bidType] * BigInt.PRECISION) / newReserveBid
+    const askFee =
+      (((BigInt.PRECISION - beta) ** 2n - (BigInt.PRECISION - alpha) ** 2n) *
+        this.anchor[askType]) /
       BigInt.PRECISION ** 2n /
       2n
-    const fee = loss > 1n ? loss : 1n
-    if (!update) return { x, fee, y, step }
-    if (fee * newReserveBid > y * newReserveAsk) {
-      x = x - update
-      y = y + update
-      return this.loop(x, y, update / 2n, bidType, askType, ++step)
-    } else if (fee * newReserveBid < y * newReserveAsk) {
-      x = x + update
-      y = y - update
-      return this.loop(x, y, update / 2n, bidType, askType, ++step)
+    if (!update) return { bidAmount, bidFee, askFee }
+    if (askFee * newReserveBid > bidFee * newReserveAsk) {
+      bidFee = bidFee + update
+      return this.loop(amount, bidFee, update / 2n, bidType, askType, ++step)
+    } else if (askFee * newReserveBid < bidFee * newReserveAsk) {
+      bidFee = bidFee - update
+      return this.loop(amount, bidFee, update / 2n, bidType, askType, ++step)
     } else {
-      return { x, y, fee, step }
+      return { bidAmount, bidFee, askFee }
     }
   }
 
   swap = (amount, bidType = 'A', askType = 'B') => {
     // Compute propostion
-    const { x, y, fee, step } = this.loop(
+    const { bidAmount, bidFee, askFee } = this.loop(
       amount,
       0n,
       amount / 2n,
       bidType,
       askType,
     )
-    console.log(x, y, fee, step)
-    // Bid/Ask reserve
+    // Bid & Ask reserve
     const prevBidReserve = this[bidType]
-    const nextBidReserve = prevBidReserve + x
+    const nextBidReserve = prevBidReserve + bidAmount
     const prevAskReserve = this[askType]
     const nextAskReserve = (prevBidReserve * prevAskReserve) / nextBidReserve
-    const askAmount = prevAskReserve - nextAskReserve - fee
+    const askAmount = prevAskReserve - nextAskReserve - askFee
 
     const prevPrice = Number(prevAskReserve) / Number(prevBidReserve)
     const nextPrice = Number(nextAskReserve) / Number(nextBidReserve)
     const anchorPrice =
       Number(this.anchor[askType]) / Number(this.anchor[bidType])
     console.log(
-      'Price change',
+      'Price change %',
       (Math.abs(nextPrice - prevPrice) / prevPrice) * 100,
-      'Deviation',
+      'Deviation %',
       (Math.abs(nextPrice - anchorPrice) / anchorPrice) * 100,
     )
     console.log(
-      'Fee',
-      fee,
-      (Number(fee) / Number(prevAskReserve - nextAskReserve)) * 100,
+      'Bidfee',
+      bidFee,
+      'Askfee',
+      askFee,
+      'Fee %',
+      (1 -
+        (Number(askAmount) / Number(prevAskReserve - nextAskReserve)) *
+          (Number(bidAmount) / Number(amount))) *
+        100,
     )
     // History
-    this[bidType] = nextBidReserve + y
-    this[askType] = nextAskReserve + fee
+    this[bidType] = nextBidReserve + bidFee
+    this[askType] = nextAskReserve + askFee
     this.anchor[bidType] =
-      this.anchor[bidType] + (y * this.anchor[bidType]) / this[bidType]
+      this.anchor[bidType] + (bidFee * this.anchor[bidType]) / this[bidType]
     this.anchor[askType] =
-      this.anchor[askType] + (fee * this.anchor[askType]) / this[askType]
+      this.anchor[askType] + (askFee * this.anchor[askType]) / this[askType]
     this.record()
     // Return
     return askAmount

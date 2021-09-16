@@ -1,11 +1,12 @@
 require('./math')
 
 class SwapBot {
-  constructor(A, B, amm, trader = 1000n) {
+  constructor(A, B, amm, trader = 1000n, marketTrend = 0.5) {
     this.A = A
     this.B = B
     this.amm = amm
     this.trader = trader
+    this.marketTrend = marketTrend
 
     // History
     this.history = []
@@ -23,7 +24,7 @@ class SwapBot {
   swap = () => {
     // Sell A Buy B when signal is true
     // Sell B Buy A when signal is false
-    const signal = Math.random() > 0.65
+    const signal = Math.random() > this.marketTrend
     const bidType = signal ? 'A' : 'B'
     const askType = signal ? 'B' : 'A'
     if (signal) {
