@@ -10,7 +10,7 @@ const marketTrend = 0.65
 const amm = new AMM(A, B)
 const bot = new SwapBot(A, B, amm, 1000n, marketTrend)
 
-let stop = 1000
+let stop = 10000
 console.log(amm.history[amm.history.length - 1])
 while (stop-- > 0) {
   console.log('=======================================================')

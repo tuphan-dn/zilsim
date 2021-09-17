@@ -1,10 +1,10 @@
 require('./math')
 
-const TAX = 250000000000000n
+const FEE = 2500000000000000n
+const TAX = 500000000000000n
 
 class AMM {
   constructor(A, B) {
-    console.log(A, B)
     this.A = A
     this.B = B
     this.liquidity = (A * B).sqrt()
@@ -64,12 +64,13 @@ class AMM {
     const bidAmount = amount - bidFee
     const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
+    const askAmount = this[askType] - newReserveAsk
     // [always] alpha > beta
     const alpha = (this.anchor[bidType] * BigInt.PRECISION) / this[bidType]
     const beta = (this.anchor[bidType] * BigInt.PRECISION) / newReserveBid
     const signed =
       (BigInt.PRECISION - beta) * (BigInt.PRECISION - alpha) >= 0n ? -1n : 1n
-    const askFee =
+    const loss =
       ((
         (BigInt.PRECISION - beta) ** 2n +
         signed * (BigInt.PRECISION - alpha) ** 2n
@@ -77,6 +78,8 @@ class AMM {
         this.anchor[askType]) /
       BigInt.PRECISION ** 2n /
       2n
+    const minFee = (FEE * askAmount) / BigInt.PRECISION
+    const askFee = loss < minFee ? minFee : loss
     if (!update) return { bidAmount, bidFee, askFee }
     if (askFee * newReserveBid > bidFee * newReserveAsk) {
       bidFee = bidFee + update
@@ -89,8 +92,7 @@ class AMM {
     }
   }
 
-  swap = (amount, bidType = 'A', askType = 'B') => {
-    // Compute propostion
+  fee = (amount, bidType = 'A', askType = 'B') => {
     const { bidAmount, bidFee, askFee } = this.loop(
       amount,
       0n,
@@ -98,6 +100,13 @@ class AMM {
       bidType,
       askType,
     )
+    const fee = (FEE * bidAmount) / BigInt.PRECISION
+    return { bidAmount, bidFee, askFee }
+  }
+
+  swap = (amount, bidType = 'A', askType = 'B') => {
+    // Compute propostion
+    const { bidAmount, bidFee, askFee } = this.fee(amount, bidType, askType)
     // Bid & Ask reserve
     const prevBidReserve = this[bidType]
     const nextBidReserve = prevBidReserve + bidAmount
