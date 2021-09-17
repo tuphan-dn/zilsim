@@ -1,4 +1,5 @@
 require('./math')
+const numeral = require('numeral')
 
 const FEE = 2500000000000000n
 const TAX = 500000000000000n
@@ -64,13 +65,20 @@ class AMM {
     const bidAmount = amount - bidFee
     const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
-    const askAmount = this[askType] - newReserveAsk
     // [always] alpha > beta
     const alpha = (this.anchor[bidType] * BigInt.PRECISION) / this[bidType]
     const beta = (this.anchor[bidType] * BigInt.PRECISION) / newReserveBid
     const signed =
       (BigInt.PRECISION - beta) * (BigInt.PRECISION - alpha) >= 0n ? -1n : 1n
-    const loss =
+    console.log(
+      Number(
+        (
+          (BigInt.PRECISION - beta) ** 2n +
+          signed * (BigInt.PRECISION - alpha) ** 2n
+        ).abs() / BigInt.PRECISION,
+      ) / Number(BigInt.PRECISION),
+    )
+    const askFee =
       ((
         (BigInt.PRECISION - beta) ** 2n +
         signed * (BigInt.PRECISION - alpha) ** 2n
@@ -78,8 +86,6 @@ class AMM {
         this.anchor[askType]) /
       BigInt.PRECISION ** 2n /
       2n
-    const minFee = (FEE * askAmount) / BigInt.PRECISION
-    const askFee = loss < minFee ? minFee : loss
     if (!update) return { bidAmount, bidFee, askFee }
     if (askFee * newReserveBid > bidFee * newReserveAsk) {
       bidFee = bidFee + update
@@ -100,7 +106,6 @@ class AMM {
       bidType,
       askType,
     )
-    const fee = (FEE * bidAmount) / BigInt.PRECISION
     return { bidAmount, bidFee, askFee }
   }
 
@@ -120,29 +125,34 @@ class AMM {
       Number(this.anchor[askType]) / Number(this.anchor[bidType])
     console.log(bidType, '→', askType)
     console.log(
-      'Price change %',
-      (Math.abs(nextPrice - prevPrice) / prevPrice) * 100,
-      'Deviation %',
-      (Math.abs(nextPrice - anchorPrice) / anchorPrice) * 100,
+      `Price Change: ${numeral(
+        (Math.abs(nextPrice - prevPrice) / prevPrice) * 100,
+      ).format('0.[000]')}%`,
+      `\tDeviation: ${numeral(
+        (Math.abs(nextPrice - anchorPrice) / anchorPrice) * 100,
+      ).format('0.[000]')}%`,
     )
     console.log(
       'Bidfee',
       bidFee,
+      `[${numeral((Number(bidFee) / Number(bidAmount + bidFee)) * 100).format(
+        '0.[000]',
+      )}%]`,
       'Askfee',
       askFee,
-      'Fee %',
-      (1 -
-        (Number(askAmount) / Number(prevAskReserve - nextAskReserve)) *
-          (Number(bidAmount) / Number(amount))) *
-        100,
+      `[${numeral((Number(askFee) / Number(askAmount + askFee)) * 100).format(
+        '0.[000]',
+      )}%]`,
     )
     // History
     this[bidType] = nextBidReserve + bidFee
     this[askType] = nextAskReserve + askFee
-    this.anchor[bidType] =
-      this.anchor[bidType] + (bidFee * this.anchor[bidType]) / this[bidType]
-    this.anchor[askType] =
-      this.anchor[askType] + (askFee * this.anchor[askType]) / this[askType]
+    this.anchor[bidType] = this.anchor[bidType] + bidFee
+    this.anchor[askType] = this.anchor[askType] + askFee
+    // this.anchor[bidType] =
+    //   this.anchor[bidType] + (bidFee * this.anchor[bidType]) / this[bidType]
+    // this.anchor[askType] =
+    //   this.anchor[askType] + (askFee * this.anchor[askType]) / this[askType]
     this.record()
     // Return
     return askAmount

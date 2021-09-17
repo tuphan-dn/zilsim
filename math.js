@@ -32,5 +32,5 @@ BigInt.prototype.less = function () {
  */
 BigInt.prototype.abs = function () {
   if (this < 0n) return this * -1n
-  return this
+  return this.valueOf()
 }

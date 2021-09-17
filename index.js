@@ -6,11 +6,11 @@ const decimals = 10n ** 0n
 const A = 1000000000n * decimals
 const B = 5000000000n * decimals
 
-const marketTrend = 0.65
+const marketTrend = 0.95
 const amm = new AMM(A, B)
 const bot = new SwapBot(A, B, amm, 1000n, marketTrend)
 
-let stop = 10000
+let stop = 1000
 console.log(amm.history[amm.history.length - 1])
 while (stop-- > 0) {
   console.log('=======================================================')
