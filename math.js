@@ -28,6 +28,22 @@ BigInt.prototype.less = function () {
 }
 
 /**
+ * Min
+ */
+BigInt.prototype.min = function (min) {
+  if (this > min) return min
+  else return this.valueOf()
+}
+
+/**
+ * Max
+ */
+BigInt.prototype.max = function (max) {
+  if (this < max) return max
+  else return this.valueOf()
+}
+
+/**
  * Absolution
  */
 BigInt.prototype.abs = function () {

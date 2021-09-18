@@ -5,17 +5,18 @@ const { SwapBot } = require('./bot')
 const decimals = 10n ** 0n
 const A = 1000000000n * decimals
 const B = 5000000000n * decimals
+const interests = (10n * BigInt.PRECISION) / 100n // 4%
 
-const marketTrend = 0.95
-const amm = new AMM(A, B)
-const bot = new SwapBot(A, B, amm, 1000n, marketTrend)
+const amm = new AMM(A, B, interests)
+const bot = new SwapBot(A / 1000n, B / 1000n, amm)
 
-let stop = 1000
+const marketTrend = 0.65
+let stop = 10000
 console.log(amm.history[amm.history.length - 1])
 while (stop-- > 0) {
   console.log('=======================================================')
   // Swap
-  const returns = bot.swap()
+  const returns = bot.swap(marketTrend)
   console.log('Returns:', returns)
   console.log(amm.history[amm.history.length - 1])
   // Estimate loss
@@ -24,4 +25,5 @@ while (stop-- > 0) {
   const depo = 2n * lastB
   const profit = depo - hodl
   console.log('Profit:', profit)
+  console.log('Interest:', (Number(profit) / Number(hodl)) * 100)
 }
