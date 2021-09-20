@@ -2,29 +2,28 @@ require('./math')
 const numeral = require('numeral')
 
 const FEE = 2500000000000000n
-const TAX = 500000000000000n
+const TAX = 1000000000000000n
 
 class AMM {
-  constructor(A, B, interests) {
+  constructor(A, B, velocity) {
     this.A = A
     this.B = B
-    this.interests = interests
     this.liquidity = (A * B).sqrt()
-    this.discount = 2n
     this.anchor = { A, B }
+    // Programmable interest
+    this.velocity = velocity
+    this.interests = 0n
     // History
     this.history = []
     this.record()
   }
 
-  getDiscount() {
-    const hodl = (this.anchor.A * this.B) / this.A + this.anchor.B
-    const depo = 2n * this.B
+  getInterests(A, B) {
+    const hodl = (this.anchor.A * B) / A + this.anchor.B
+    const depo = 2n * B
     const profit = depo - hodl
-    const expectedProfit = (hodl * this.interests) / BigInt.PRECISION
-    if (profit < expectedProfit) this.discount = (this.discount - 1n).max(2n)
-    if (profit > expectedProfit) this.discount = this.discount + 1n
-    return this.discount
+    const interests = (profit * BigInt.PRECISION) / hodl
+    return interests
   }
 
   record = () => {
@@ -63,46 +62,36 @@ class AMM {
     update,
     bidType = 'A',
     askType = 'B',
-    discount = 2n,
     step = 0,
   ) => {
     const bidAmount = amount - bidFee
     const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
-    // [always] alpha > beta
-    const alpha = (this.anchor[bidType] * BigInt.PRECISION) / this[bidType]
-    const beta = (this.anchor[bidType] * BigInt.PRECISION) / newReserveBid
-    const signed =
-      (BigInt.PRECISION - beta) * (BigInt.PRECISION - alpha) >= 0n ? -1n : 1n
-    const askFee =
-      ((
-        (BigInt.PRECISION - beta) ** 2n +
-        signed * (BigInt.PRECISION - alpha) ** 2n
-      ).abs() *
-        this.anchor[askType]) /
-      BigInt.PRECISION ** 2n /
-      discount
+    const askFee = (bidFee * newReserveAsk) / newReserveBid
+    const interests = this.getInterests(
+      bidType === 'A' ? newReserveBid + bidFee : newReserveAsk + askFee,
+      askType === 'B' ? newReserveAsk + askFee : newReserveBid + bidFee,
+    )
     if (!update) return { bidAmount, bidFee, askFee }
-    if (askFee * newReserveBid > bidFee * newReserveAsk) {
-      bidFee = bidFee + update
+    if (interests > this.interests) {
+      const minBidFee = (amount * TAX) / BigInt.PRECISION
+      bidFee = (bidFee - update).max(minBidFee)
       return this.adaptive(
         amount,
         bidFee,
         update / 2n,
         bidType,
         askType,
-        discount,
         ++step,
       )
-    } else if (askFee * newReserveBid < bidFee * newReserveAsk) {
-      bidFee = bidFee - update
+    } else if (interests < this.interests) {
+      bidFee = (bidFee + update).min(amount)
       return this.adaptive(
         amount,
         bidFee,
         update / 2n,
         bidType,
         askType,
-        discount,
         ++step,
       )
     } else {
@@ -111,15 +100,13 @@ class AMM {
   }
 
   fee = (amount, bidType = 'A', askType = 'B') => {
-    const discount = this.getDiscount()
-    console.log(discount)
+    this.interests = this.interests + this.velocity
     const { bidAmount, bidFee, askFee } = this.adaptive(
       amount,
       0n,
       amount / 2n,
       bidType,
       askType,
-      discount,
     )
     return { bidAmount, bidFee, askFee }
   }
