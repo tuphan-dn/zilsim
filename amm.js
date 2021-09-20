@@ -1,30 +1,18 @@
 require('./math')
 const numeral = require('numeral')
 
-const FEE = 2500000000000000n
+const FEE = 1000000000000000n
 const TAX = 500000000000000n
 
 class AMM {
-  constructor(A, B, interests) {
+  constructor(A, B) {
     this.A = A
     this.B = B
-    this.interests = interests
     this.liquidity = (A * B).sqrt()
-    this.discount = 2n
     this.anchor = { A, B }
     // History
     this.history = []
     this.record()
-  }
-
-  getDiscount() {
-    const hodl = (this.anchor.A * this.B) / this.A + this.anchor.B
-    const depo = 2n * this.B
-    const profit = depo - hodl
-    const expectedProfit = (hodl * this.interests) / BigInt.PRECISION
-    if (profit < expectedProfit) this.discount = (this.discount - 1n).max(2n)
-    if (profit > expectedProfit) this.discount = this.discount + 1n
-    return this.discount
   }
 
   record = () => {
@@ -63,7 +51,6 @@ class AMM {
     update,
     bidType = 'A',
     askType = 'B',
-    discount = 2n,
     step = 0,
   ) => {
     const bidAmount = amount - bidFee
@@ -81,7 +68,7 @@ class AMM {
       ).abs() *
         this.anchor[askType]) /
       BigInt.PRECISION ** 2n /
-      discount
+      2n
     if (!update) return { bidAmount, bidFee, askFee }
     if (askFee * newReserveBid > bidFee * newReserveAsk) {
       bidFee = bidFee + update
@@ -91,7 +78,6 @@ class AMM {
         update / 2n,
         bidType,
         askType,
-        discount,
         ++step,
       )
     } else if (askFee * newReserveBid < bidFee * newReserveAsk) {
@@ -102,7 +88,6 @@ class AMM {
         update / 2n,
         bidType,
         askType,
-        discount,
         ++step,
       )
     } else {
@@ -111,15 +96,12 @@ class AMM {
   }
 
   fee = (amount, bidType = 'A', askType = 'B') => {
-    const discount = this.getDiscount()
-    console.log(discount)
     const { bidAmount, bidFee, askFee } = this.adaptive(
       amount,
       0n,
       amount / 2n,
       bidType,
       askType,
-      discount,
     )
     return { bidAmount, bidFee, askFee }
   }
@@ -168,8 +150,9 @@ class AMM {
       )}%]`,
     )
     // History
-    this[bidType] = nextBidReserve + bidFee
-    this[askType] = nextAskReserve + askFee
+    this[bidType] = nextBidReserve
+    this[askType] = nextAskReserve
+    this.deposit(bidFee, askFee)
     this.record()
     // Return
     return askAmount
