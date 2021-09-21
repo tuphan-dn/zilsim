@@ -47,7 +47,11 @@ class Stat {
   }
 
   get = (type = 'bid') => {
+    let sum = 0
+    let low = 0
     this[type].forEach((value, index) => {
+      sum = sum + value
+      if ((index + 1) * 0.05 <= 0.3) low = low + value
       console.log(
         `% ${numeral(index * 0.05).format('0.00')} - ${numeral(
           (index + 1) * 0.05,
@@ -55,6 +59,7 @@ class Stat {
         value,
       )
     })
+    console.log(`${low}/${sum} %`, (low / sum) * 100)
   }
 }
 
