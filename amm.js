@@ -111,7 +111,6 @@ class AMM {
       this.origin[askType]
     if (profit > 0) this.discount = (this.discount * 2n).min(1024n)
     if (profit < 0) this.discount = (this.discount / 2n).max(2n)
-    console.log(profit, this.discount)
     const { bidAmount, bidFee, askFee } = this.adaptive(
       amount,
       0n,
