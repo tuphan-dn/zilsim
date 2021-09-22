@@ -1,47 +1,39 @@
 require('./math')
 const numeral = require('numeral')
+const Stat = require('./stat')
 
-const FEE = 2500000000000000n
+const FEE = 1000000000000000n
 const TAX = 1000000000000000n
 
 class AMM {
-  constructor(A, B, velocity) {
+  constructor(A, B) {
     this.A = A
     this.B = B
     this.liquidity = (A * B).sqrt()
-    this.anchor = { A, B }
-    // Programmable interest
-    this.velocity = velocity
-    this.interests = 0n
     // History
     this.history = []
     this.record()
-  }
-
-  getInterests(A, B) {
-    const hodl = (this.anchor.A * B) / A + this.anchor.B
-    const depo = 2n * B
-    const profit = depo - hodl
-    const interests = (profit * BigInt.PRECISION) / hodl
-    return interests
+    this.stat = new Stat()
   }
 
   record = () => {
-    const slice = {
-      A: this.A,
-      B: this.B,
-      anchor: { ...this.anchor },
-    }
+    const slice = { A: this.A, B: this.B }
     this.history.push(slice)
+  }
+
+  // Precision: BigInt.PRECISION = 10^18
+  _deviate = (A, B, anchorA, anchorB) => {
+    const anchorPrice = (anchorB * BigInt.PRECISION) / anchorA
+    const currentPrice = (B * BigInt.PRECISION) / A
+    return ((currentPrice * BigInt.PRECISION ** 2n) / anchorPrice).sqrt()
   }
 
   deposit = (a, b) => {
     if (a < 0n || b < 0n) throw new Error('Must be positive numbers')
     this.A = this.A + a
     this.B = this.B + b
-    this.anchor.A = this.anchor.A + a
-    this.anchor.B = this.anchor.B + b
     const lpt = (a * this.liquidity) / this.A
+    this.liquidity = this.liquidity + lpt
     return { lpt }
   }
 
@@ -51,8 +43,7 @@ class AMM {
     const b = (lpt * this.B) / this.liquidity
     this.A = this.A - a
     this.B = this.B - b
-    this.anchor.A = this.anchor.A - (lpt * this.anchor.A) / this.liquidity
-    this.anchor.B = this.anchor.B - (lpt * this.anchor.B) / this.liquidity
+    this.liquidity = this.liquidity - lpt
     return { a, b }
   }
 
@@ -67,15 +58,18 @@ class AMM {
     const bidAmount = amount - bidFee
     const newReserveBid = this[bidType] + bidAmount
     const newReserveAsk = (this[askType] * this[bidType]) / newReserveBid
-    const askFee = (bidFee * newReserveAsk) / newReserveBid
-    const interests = this.getInterests(
-      bidType === 'A' ? newReserveBid + bidFee : newReserveAsk + askFee,
-      askType === 'B' ? newReserveAsk + askFee : newReserveBid + bidFee,
+    const alpha = this._deviate(
+      newReserveBid,
+      newReserveAsk,
+      this[bidType],
+      this[askType],
     )
+    const askFee =
+      ((BigInt.PRECISION - alpha) ** 2n * this[askType]) /
+      BigInt.PRECISION ** 2n / 2n
     if (!update) return { bidAmount, bidFee, askFee }
-    if (interests > this.interests) {
-      const minBidFee = (amount * TAX) / BigInt.PRECISION
-      bidFee = (bidFee - update).max(minBidFee)
+    if (askFee * newReserveBid > bidFee * newReserveAsk) {
+      bidFee = bidFee + update
       return this.adaptive(
         amount,
         bidFee,
@@ -84,8 +78,8 @@ class AMM {
         askType,
         ++step,
       )
-    } else if (interests < this.interests) {
-      bidFee = (bidFee + update).min(amount)
+    } else if (askFee * newReserveBid < bidFee * newReserveAsk) {
+      bidFee = bidFee - update
       return this.adaptive(
         amount,
         bidFee,
@@ -100,7 +94,6 @@ class AMM {
   }
 
   fee = (amount, bidType = 'A', askType = 'B') => {
-    this.interests = this.interests + this.velocity
     const { bidAmount, bidFee, askFee } = this.adaptive(
       amount,
       0n,
@@ -120,39 +113,17 @@ class AMM {
     const prevAskReserve = this[askType]
     const nextAskReserve = (prevBidReserve * prevAskReserve) / nextBidReserve
     const askAmount = prevAskReserve - nextAskReserve - askFee
+    const fee = this.stat.set(bidFee, bidAmount, askFee, askAmount)
 
     const prevPrice = Number(prevAskReserve) / Number(prevBidReserve)
     const nextPrice = Number(nextAskReserve) / Number(nextBidReserve)
-    const anchorPrice =
-      Number(this.anchor[askType]) / Number(this.anchor[bidType])
     console.log(bidType, '→', askType)
-    console.log(
-      'Previous Price:',
-      prevPrice,
-      'Next Price:',
-      nextPrice,
-      'Anchor Price:',
-      anchorPrice,
-    )
+    console.log('Previous Price:', prevPrice, 'Next Price:', nextPrice)
     console.log(
       `Price Change: ${numeral(
         (Math.abs(nextPrice - prevPrice) / prevPrice) * 100,
       ).format('0.[000]')}%`,
-      `\tDeviation: ${numeral(
-        (Math.abs(nextPrice - anchorPrice) / anchorPrice) * 100,
-      ).format('0.[000]')}%`,
-    )
-    console.log(
-      'Bidfee',
-      bidFee,
-      `[${numeral((Number(bidFee) / Number(bidAmount + bidFee)) * 100).format(
-        '0.[000]',
-      )}%]`,
-      'Askfee',
-      askFee,
-      `[${numeral((Number(askFee) / Number(askAmount + askFee)) * 100).format(
-        '0.[000]',
-      )}%]`,
+      `\tFee: ${numeral(fee).format('0.[000]')}%`,
     )
     // History
     this[bidType] = nextBidReserve + bidFee

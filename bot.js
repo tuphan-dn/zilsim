@@ -1,11 +1,36 @@
 require('./math')
 
+class LPBot {
+  constructor(A, B, amm) {
+    this.A = A
+    this.B = B
+    this.amm = amm
+    this.lpt = 0n
+  }
+
+  deposit = () => {
+    const a = this.A.less()
+    const b = (this.amm.B * a) / this.amm.A
+    const { lpt } = this.amm.deposit(a, b)
+    this.lpt = this.lpt + lpt
+    this.A = this.A - a
+    this.B = this.B - b
+  }
+
+  withdraw = () => {
+    const lpt = this.lpt
+    const { a, b } = this.amm.withdraw(lpt)
+    this.lpt = this.lpt - lpt
+    this.A = this.A + a
+    this.B = this.B + b
+  }
+}
+
 class SwapBot {
   constructor(A, B, amm) {
     this.A = A
     this.B = B
     this.amm = amm
-
     // History
     this.history = []
     this.record()
@@ -39,4 +64,4 @@ class SwapBot {
   }
 }
 
-module.exports = { SwapBot }
+module.exports = { LPBot, SwapBot }
