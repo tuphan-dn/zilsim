@@ -4,8 +4,7 @@ const DIVISION = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 class Stat {
   constructor() {
-    this.bid = [...DIVISION]
-    this.ask = [...DIVISION]
+    this.data = [...DIVISION]
   }
 
   infer = (percentage) => {
@@ -30,32 +29,32 @@ class Stat {
     else if (0.85 <= percentage && percentage < 0.9) re[17] = 1
     else if (0.9 <= percentage && percentage < 0.95) re[18] = 1
     else if (0.95 <= percentage && percentage < 1) re[19] = 1
-    else re[0] = 1
+    else re[20] = 1
     return re
   }
 
   set = (bidFee, bidAmount, askFee, askAmount) => {
-    const bidPercentage = (Number(bidFee) / Number(bidAmount + bidFee)) * 100
-    const askPercentage = (Number(askFee) / Number(askAmount + askFee)) * 100
-    this.infer(bidPercentage).forEach((value, index) => {
-      this.bid[index] = this.bid[index] + value
+    const bidPercentage = Number(bidFee) / Number(bidAmount + bidFee)
+    const askPercentage = Number(askFee) / Number(askAmount + askFee)
+    const percentage = (1 - (1 - bidPercentage) * (1 - askPercentage)) * 100
+    this.infer(percentage).forEach((value, index) => {
+      this.data[index] = this.data[index] + value
     })
-    this.infer(askPercentage).forEach((value, index) => {
-      this.ask[index] = this.ask[index] + value
-    })
-    return { bidPercentage, askPercentage }
+    return percentage
   }
 
-  get = (type = 'bid') => {
+  get = () => {
     let sum = 0
     let low = 0
-    this[type].forEach((value, index) => {
+    this.data.forEach((value, index) => {
       sum = sum + value
       if ((index + 1) * 0.05 <= 0.3) low = low + value
       console.log(
-        `% ${numeral(index * 0.05).format('0.00')} - ${numeral(
-          (index + 1) * 0.05,
-        ).format('0.[00]')}:`,
+        `% ${numeral(index * 0.05).format('0.00')} - ${
+          (index + 1) * 0.05 > 1
+            ? '...'
+            : numeral((index + 1) * 0.05).format('0.[00]')
+        }:`,
         value,
       )
     })
