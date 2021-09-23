@@ -135,7 +135,6 @@ class AMM {
       2n * this[askType] -
       (this.origin[bidType] * this[askType]) / this[bidType] -
       this.origin[askType]
-    console.log(profit)
     if (profit > 0) this.discount = (this.discount * 2n).min(1024n)
     if (profit < 0) this.discount = (this.discount / 2n).max(2n)
     const { bidAmount, bidFee, askFee } = this.adaptive(
@@ -163,7 +162,6 @@ class AMM {
     const nextPrice = Number(nextAskReserve) / Number(nextBidReserve)
     const anchorPrice =
       Number(this.anchor[askType]) / Number(this.anchor[bidType])
-    console.log(this.discount)
     console.log(bidType, '→', askType)
     console.log(
       'Previous Price:',

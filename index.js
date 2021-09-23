@@ -12,7 +12,7 @@ const swapBot = new SwapBot(A / 1000n, B / 1000n, amm)
 const lpBot = new LPBot(A, B, amm)
 
 const marketTrend = 0.65
-let stop = 100000
+let stop = 10000
 console.log(amm.history[amm.history.length - 1])
 while (stop-- > 0) {
   console.log('=======================================================')
